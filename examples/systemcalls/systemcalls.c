@@ -11,13 +11,14 @@ bool do_system(const char *cmd)
 {
 
 /*
- * TODO  add your code here
  *  Call the system() function with the command set in the cmd
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    // @TODO input sanitation, do not do this
+    int res = system(cmd);
 
-    return true;
+    return res == 0;
 }
 
 /**
@@ -45,12 +46,9 @@ bool do_exec(int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
-
+    va_end(args);
+   
 /*
- * TODO:
  *   Execute a system command by calling fork, execv(),
  *   and wait instead of system (see LSP page 161).
  *   Use the command[0] as the full path to the command to execute
@@ -58,10 +56,28 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t pid;
+    bool success = false;
+    
+    pid = fork();
+    if (pid == 0) {
+        // inside child
+        execv(command[0], &command[0]);
+        // If we end up here, our execv failed
+        _exit(EXIT_FAILURE);
+    } else if (pid > 0) {
+        int status;
+        // if wait returns -1 it has failed
+        if (-1==wait(&status)) goto EXIT;
+        
+        // check if child exited ok with good exit code
+        if ( WIFEXITED(status) && (WEXITSTATUS(status) == EXIT_SUCCESS ) ) { 
+            success = true;
+        }
+    }
 
-    va_end(args);
-
-    return true;
+    EXIT:
+    return success;
 }
 
 /**
@@ -80,20 +96,41 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
+    va_end(args);
 
 
 /*
- * TODO
  *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
  *   redirect standard out to a file specified by outputfile.
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    bool success = false;
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    if (fd<0) goto EXIT;
+    pid_t pid;
+    
+    pid = fork();
+    if (pid == 0) {
+        // inside child
+        if (dup2(fd, 1) < 0) { _exit(EXIT_FAILURE); }
+        close(fd);
+        execv(command[0], &command[0]);
+        // If we end up here, our execv failed
+        _exit(EXIT_FAILURE);
+    } else if (pid > 0) {
+        close(fd);
+        
+        int status;
+        // if wait returns -1 it has failed
+        if (-1==wait(&status)) goto EXIT;
+        
+        // check if child exited ok with good exit code
+        if ( WIFEXITED(status) && (WEXITSTATUS(status) == EXIT_SUCCESS ) ) { 
+            success = true;
+        }
+    }
 
-    va_end(args);
-
-    return true;
+    EXIT:
+    return success;
 }
