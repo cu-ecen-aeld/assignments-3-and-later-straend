@@ -10,5 +10,7 @@ fi
 
 cd $1
 filecount=$(find -type f | wc -l)
-linecount=$(grep -r $2 | wc -l)
+# grep -r does not seem to work the same with busybox
+#linecount=$(grep -r $2 | wc -l)
+linecount=$(grep $2 $(find . -type f) | wc -l)
 echo "The number of files are $filecount and the number of matching lines are $linecount"
