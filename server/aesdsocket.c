@@ -9,60 +9,93 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #define LOG_FILE "/var/tmp/aesdsocketdata"
 #define PORT "9000"
 #define BUFFER_SIZE (1024)
 
 #define FK_DEBUG 
+bool got_signal = false;
+
+int sockfd;
 
 static void sigHandler(int sig)
 {
-    unlink(LOG_FILE);
-    syslog(LOG_ERR, "Caught signal, exiting");
-    FK_DEBUG("SIGINT\n");
+  FK_DEBUG("SIGINT\n");
+  syslog(LOG_ERR, "Caught signal, exiting");
+  
+  // close sockets
+  shutdown(sockfd, SHUT_RD);
+  shutdown(sockfd, SHUT_WR);
+  close(sockfd);
 
-    // close sockets
-    exit(1);
+  //close(sockfd);
+  //shutdown(sockfd, SHUT_RDWR);
+  unlink(LOG_FILE);
+  got_signal = true;
+
+  _exit(EXIT_FAILURE);
+    
 }
 
 int main(int argc, char *argv[])
 {
     openlog("AESDSOCKET", 0, LOG_USER);
-    signal(SIGINT, sigHandler);
-    signal(SIGTERM, sigHandler);
+   
 
     // making socket to listen on
     struct addrinfo hints;
     struct addrinfo *servinfo;
-    int sockfd;
 
     memset((void *)&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     
+    
     FK_DEBUG("getaddrinfo\n");
     if (0 != getaddrinfo(NULL, PORT, &hints, &servinfo) ) goto ERR_GETADDRINFO;
 
-    // bind to socket
     FK_DEBUG("creating socket\n");
     sockfd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
     if (0 == sockfd) goto ERR_SOCKET;
       
-    servinfo->ai_flags |= SO_REUSEADDR;
-    
+    // Enable reuseaddr
+    int on = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0)
+
     FK_DEBUG("binding socket\n");
     int sock = bind(sockfd, servinfo->ai_addr, servinfo->ai_addrlen);
     if (0 != sock) goto ERR_BIND;
      
     freeaddrinfo(servinfo);
-    
+    if (argc > 1) {
+      if (strncmp("-d", argv[1], 2) == 0) {
+        printf("start daemon\n");
+        
+        switch(fork()){
+          case -1: 
+            printf("Failed at forking\n");
+            return -1;
+          case 0:
+            // We should continue the app
+            break;
+          default:
+            _exit(EXIT_SUCCESS);
+        }
+      }
+    }
+    signal(SIGINT, sigHandler);
+    signal(SIGTERM, sigHandler);
     FK_DEBUG("start listening\n");
     if( listen(sockfd, 5) < 0 ) goto ERR_LISTEN;
 
-    int f_log = open(LOG_FILE, O_CREAT|O_RDWR|S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-    if (f_log < 0) goto ERR_FILE_ERROR;
+    int f_log = open(LOG_FILE, O_CREAT | O_TRUNC |O_RDWR|S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    if (f_log < 0) {
+      syslog(LOG_ERR, "OPpenfile failed: %d", f_log);
+      goto ERR_FILE_ERROR;
+    }
     
     while (1){
       int c;
@@ -145,10 +178,11 @@ int main(int argc, char *argv[])
       unlink(LOG_FILE);
 
     }
+    shutdown(sockfd, SHUT_RD);
+    shutdown(sockfd, SHUT_WR);
     close(sockfd);
     closelog();
     return 0;
-
       
   ERR_GETADDRINFO:
     syslog(LOG_ERR, "getaddrinfo failed");
@@ -163,11 +197,13 @@ int main(int argc, char *argv[])
     goto RETURN_ERR;
     
   ERR_LISTEN:
+    close(sockfd);
     syslog(LOG_ERR, "Error listening");
     FK_DEBUG("Cold not listen\n");
     goto RETURN_ERR;
   
   ERR_BUFFER_ALLOCATION:
+    close(sockfd);
     syslog(LOG_ERR, "Error allocating buffer");
     FK_DEBUG("BUFFER\n");
     close(f_log);
@@ -175,6 +211,7 @@ int main(int argc, char *argv[])
     goto RETURN_ERR;
   
   ERR_NOTHING_TO_SEND:
+    close(sockfd);
     syslog(LOG_ERR, "No data received to send");
     close(f_log);
     goto RETURN_ERR;
@@ -184,14 +221,17 @@ int main(int argc, char *argv[])
     goto RETURN_ERR;
   
   ERR_FILE_ERROR:
+    close(sockfd);
     syslog(LOG_ERR, "Error opening file: %d", errno);
     FK_DEBUG("Error opening file: %d\n", errno);
     goto RETURN_ERR;
     
   ERR_FILE_WRITE:
+    close(sockfd);
     syslog(LOG_ERR, "Error writing to file: %d", errno);
     goto RETURN_ERR;
-  
+
+
   RETURN_ERR:
     closelog();
     return -1;
