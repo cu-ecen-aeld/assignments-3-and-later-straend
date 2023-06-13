@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <stdarg.h>
 
 #include "freebsd_queue.h"
 
@@ -18,7 +19,19 @@
 #define PORT "9000"
 #define BUFFER_SIZE (1024)
 
-#define FK_DEBUG 
+#define DEBUG 0
+
+void FK_DEBUG(const char *fmt, ...)
+{
+
+  if (DEBUG) {
+    va_list args;
+    va_start(args, fmt);
+    printf(fmt, args);
+    va_end(args);
+  }
+}
+
 bool got_signal = false;
 int sockfd;
 
@@ -61,20 +74,14 @@ static void sigHandler(int sig)
   got_signal = true;
   
   // should free all data in linkedlist and stop all threads
-  /*
-  LIST_FOREACH(datap, &head, entries) {
+  while (!SLIST_EMPTY(&head)) {
+    datap = SLIST_FIRST(&head);
+    FK_DEBUG("Removing thread: %lu\n", datap->pid);
     pthread_cancel(datap->pid);
+
+    SLIST_REMOVE_HEAD(&head, entries);
     free(datap);
-  } 
-  */
-     while (!SLIST_EMPTY(&head)) {
-        datap = SLIST_FIRST(&head);
-        FK_DEBUG("Removing thread: %lu\n", datap->pid);
-        pthread_cancel(datap->pid);
-        
-        SLIST_REMOVE_HEAD(&head, entries);
-        free(datap);
-    }
+  }
   _exit(EXIT_FAILURE);
     
 }
@@ -197,7 +204,7 @@ void *connection_thread(void *arg)
       break;
     }
     FK_DEBUG("Sending %ld bytes total: %ld/%ld\n", this_read, readbytes+this_read, filesize);
-    int r = send(data->c, (void *)wrbuffer, this_read, 0);
+    send(data->c, (void *)wrbuffer, this_read, 0);
     readbytes += this_read;
   }
   free(wrbuffer);
@@ -286,7 +293,7 @@ int main(int argc, char *argv[])
       datap = malloc(sizeof(slist_data_t));
 
       int len_client_ca = sizeof(struct sockaddr_in);
-      if ( (datap->c = accept(sockfd, (struct sockaddr *) &datap->client_ca, &len_client_ca)) < 0) {
+      if ( (datap->c = accept(sockfd, (struct sockaddr *) &datap->client_ca, (socklen_t *)&len_client_ca)) < 0) {
         // failed accepting socket
         FK_DEBUG("Timed out accepting: %d\n", errno);
         
@@ -342,36 +349,12 @@ int main(int argc, char *argv[])
     FK_DEBUG("Cold not listen\n");
     goto RETURN_ERR;
   
-  ERR_BUFFER_ALLOCATION:
-    close(sockfd);
-    syslog(LOG_ERR, "Error allocating buffer");
-    FK_DEBUG("BUFFER\n");
-    close(f_log);
-    
-    goto RETURN_ERR;
-  
-  ERR_NOTHING_TO_SEND:
-    close(sockfd);
-    syslog(LOG_ERR, "No data received to send");
-    close(f_log);
-    goto RETURN_ERR;
-  
-  ERR_NO_ARGUMENTS:
-    syslog(LOG_ERR, "No arguments specified");
-    goto RETURN_ERR;
-  
   ERR_FILE_ERROR:
     close(sockfd);
     syslog(LOG_ERR, "Error opening file: %d", errno);
     FK_DEBUG("Error opening file: %d\n", errno);
     goto RETURN_ERR;
     
-  ERR_FILE_WRITE:
-    close(sockfd);
-    syslog(LOG_ERR, "Error writing to file: %d", errno);
-    goto RETURN_ERR;
-
-
   RETURN_ERR:
     closelog();
     return -1;

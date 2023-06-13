@@ -1,16 +1,16 @@
 .PHONY: all default clean valgrind
 
 SRC := aesdsocket.c
-TARGET = aesdsocket
-CC = gcc
-CFLAGS += -g -Wall -Werror
-
+TARGET ?= aesdsocket
+CC ?= ${CROSS_COMPILE}gcc
+CFLAGS ?= -g -Wall -Werror -std=gnu99
+LDFLAGS ?= -lpthread
 all: default
 
 default: aesdsocket
 
 aesdsocket: aesdsocket.c
-	$(CROSS_COMPILE)$(CC) -o $(TARGET) $(SRC) -lpthread
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
 
 clean:
 	-rm -f $(TARGET)
