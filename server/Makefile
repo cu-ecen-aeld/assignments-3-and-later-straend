@@ -3,7 +3,7 @@
 SRC := aesdsocket.c
 TARGET = aesdsocket
 CC = gcc
-CFLAGS += -g -Wall -Werror
+CFLAGS += -g -lpthread -Wall -Werror
 all: default
 
 default: aesdsocket
