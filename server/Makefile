@@ -3,14 +3,14 @@
 SRC := aesdsocket.c
 TARGET = aesdsocket
 CC = gcc
-CFLAGS += -g -lpthread -Wall -Werror
+CFLAGS += -g -Wall -Werror
 
 all: default
 
 default: aesdsocket
 
 aesdsocket: aesdsocket.c
-	$(CROSS_COMPILE)$(CC) -o $(TARGET) $(SRC)
+	$(CROSS_COMPILE)$(CC) -o $(TARGET) $(SRC) -lpthread
 
 clean:
 	-rm -f $(TARGET)
