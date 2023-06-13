@@ -23,8 +23,8 @@ bool got_signal = false;
 int sockfd;
 
 
-typedef struct list_data_s list_data_t;
-struct list_data_s {
+typedef struct slist_data_s slist_data_t;
+struct slist_data_s {
   struct sockaddr_in client_ca;
   int logfile;
   pthread_mutex_t *log_mutex;
@@ -33,11 +33,11 @@ struct list_data_s {
   pthread_t pid;
   bool completed;
 
-  LIST_ENTRY(list_data_s) entries;
+  SLIST_ENTRY(slist_data_s) entries;
 };
 
-list_data_t *datap=NULL;
-LIST_HEAD(listhead, list_data_s) head;
+slist_data_t *datap=NULL;
+SLIST_HEAD(slisthead, slist_data_s) head;
 
 typedef struct timestamper_data_s timestamper_data_t;
 struct timestamper_data_s {
@@ -59,11 +59,22 @@ static void sigHandler(int sig)
 
   unlink(LOG_FILE);
   got_signal = true;
+  
   // should free all data in linkedlist and stop all threads
+  /*
   LIST_FOREACH(datap, &head, entries) {
     pthread_cancel(datap->pid);
     free(datap);
   } 
+  */
+     while (!SLIST_EMPTY(&head)) {
+        datap = SLIST_FIRST(&head);
+        FK_DEBUG("Removing thread: %lu\n", datap->pid);
+        pthread_cancel(datap->pid);
+        
+        SLIST_REMOVE_HEAD(&head, entries);
+        free(datap);
+    }
   _exit(EXIT_FAILURE);
     
 }
@@ -98,7 +109,7 @@ void *timestamper(void *arg) {
 
 void *connection_thread(void *arg)
 {
-  list_data_t *data = (list_data_t *) arg;
+  slist_data_t *data = (slist_data_t *) arg;
   char *client_ip = inet_ntoa(data->client_ca.sin_addr);
   syslog(LOG_DAEMON, "Accepted connection from %s", client_ip);
     
@@ -113,7 +124,7 @@ void *connection_thread(void *arg)
     if (bytes_read < 1){
       FK_DEBUG("socket failure: %d\n", errno);
       free(buffer);
-      return;
+      return NULL;
     }
     totalbytes += bytes_read;
     
@@ -172,10 +183,10 @@ void *connection_thread(void *arg)
   lseek(data->logfile, 0, SEEK_SET);
   long filesize = lseek(data->logfile, 0, SEEK_END);
   lseek(data->logfile, 0, SEEK_SET);
-  if (filesize < 0) return; //goto ERR_NOTHING_TO_SEND; 
+  if (filesize < 0) return NULL; //goto ERR_NOTHING_TO_SEND; 
 
   char *wrbuffer = (char*) malloc(BUFFER_SIZE);
-  if (NULL==wrbuffer) return; //goto ERR_BUFFER_ALLOCATION;
+  if (NULL==wrbuffer) return NULL; //goto ERR_BUFFER_ALLOCATION;
   size_t readbytes=0;
   FK_DEBUG("Sending %ld bytes\n", filesize);
   while(readbytes < filesize) {
@@ -234,11 +245,11 @@ int main(int argc, char *argv[])
     freeaddrinfo(servinfo);
     if (argc > 1) {
       if (strncmp("-d", argv[1], 2) == 0) {
-        printf("start daemon\n");
+        FK_DEBUG("start daemon\n");
         
         switch(fork()){
           case -1: 
-            printf("Failed at forking\n");
+            FK_DEBUG("Failed at forking\n");
             return -1;
           case 0:
             // We should continue the app
@@ -270,9 +281,9 @@ int main(int argc, char *argv[])
     pthread_create(&t_data.pid, NULL, &timestamper, (void*) &t_data);
     
     // Linked List for sockets
-    LIST_INIT(&head);
+    SLIST_INIT(&head);
     while (1){
-      datap = malloc(sizeof(list_data_t));
+      datap = malloc(sizeof(slist_data_t));
 
       int len_client_ca = sizeof(struct sockaddr_in);
       if ( (datap->c = accept(sockfd, (struct sockaddr *) &datap->client_ca, &len_client_ca)) < 0) {
@@ -287,19 +298,20 @@ int main(int argc, char *argv[])
       // do the fork dance here
       // update pid in data, and insert to linked lise
       int rr = pthread_create(&datap->pid, NULL, &connection_thread, (void *) datap);
-      printf("rr: %d\n", rr);
+      FK_DEBUG("rr: %d\n", rr);
 
-      LIST_INSERT_HEAD(&head, datap, entries);
+      SLIST_INSERT_HEAD(&head, datap, entries);
 
-      LIST_FOREACH(datap, &head, entries) {
-        printf("Thread: %ld\n", (long unsigned int)datap->pid);
+      SLIST_FOREACH(datap, &head, entries) {
+        FK_DEBUG("Thread: %ld\n", (long unsigned int)datap->pid);
 
         if (datap->completed) {
-          printf("Thread: %ld is complete\n", (long unsigned int)datap->pid);
+          FK_DEBUG("Thread: %ld is complete\n", (long unsigned int)datap->pid);
           void *ret = NULL;
           pthread_join(datap->pid, &ret);
-
-          LIST_REMOVE(datap, entries);
+          FK_DEBUG("Removing thread: %lu\n", datap->pid);
+          //SLIST_REMOVE(datap, entries);
+          SLIST_REMOVE(&head, datap, slist_data_s, entries);
           free(datap);
         }
         
