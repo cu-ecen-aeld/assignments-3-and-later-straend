@@ -3,7 +3,7 @@ set -e
 
 NAME=aesdsocket
 PIDFILE=/var/run/$NAME.pid
-DAEMON=/bin/aesdsocket
+DAEMON=/usr/bin/aesdsocket
 DAEMON_OPTS="-d"
 
 case "$1" in
