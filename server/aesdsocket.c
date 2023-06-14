@@ -270,8 +270,8 @@ int main(int argc, char *argv[])
     signal(SIGTERM, sigHandler);
     FK_DEBUG("start listening\n");
     if( listen(sockfd, 5) < 0 ) goto ERR_LISTEN;
-
-    int f_log = open(LOG_FILE, O_CREAT | O_TRUNC |O_RDWR);
+    
+    int f_log = open(LOG_FILE, O_CREAT | O_TRUNC |O_RDWR, 0644);
     if (f_log < 0) {
       syslog(LOG_ERR, "OPpenfile failed: %d", f_log);
       goto ERR_FILE_ERROR;
