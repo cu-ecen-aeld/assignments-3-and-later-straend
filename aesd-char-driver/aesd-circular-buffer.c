@@ -13,6 +13,7 @@
 #else
 #include <string.h>
 #endif
+#include <stdio.h>
 
 #include "aesd-circular-buffer.h"
 
@@ -29,9 +30,28 @@
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
             size_t char_offset, size_t *entry_offset_byte_rtn )
 {
-    /**
-    * TODO: implement per description
-    */
+    struct aesd_buffer_entry *cur;
+    int index = buffer->out_offs;
+    size_t cur_len = 0;
+    int iterations = 0;
+    
+    while(iterations++ < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
+        cur = &buffer->entry[index];
+        cur_len += cur->size;
+        
+        // check if searched offset is in current range
+        if (char_offset < cur_len){
+            //printf("MATCH: offset: %ld\t cur_len: %ld\n", char_offset, cur_len);
+            //printf("\t size: %ld\t cur-len - size: %ld\n", cur->size, cur_len - cur->size);
+            *entry_offset_byte_rtn = cur->size - (cur_len - char_offset);
+            return cur;
+        }
+        
+        // increase index and wraparound to 0 if needed
+        if (++index>=AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) index = 0;
+    }
+    
+    // char_offset is too big, not in our data
     return NULL;
 }
 
@@ -44,9 +64,28 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 */
 void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-    /**
-    * TODO: implement per description
-    */
+    // Check if we have written over the limit
+    // and need to wrap around to the start again
+    if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
+        // return to first entry
+        buffer->in_offs = 0;
+        if(!buffer->full){
+            //printf("OVERRUN\n");
+            buffer->full = true;
+            
+            // increase out pointer to next item and discard the oldest value
+            if (++buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->out_offs = 0;    
+        }
+    }
+
+    
+    // insert into buffer
+    buffer->entry[buffer->in_offs] = *add_entry;
+    //printf("ADD\n");
+    //printf("\t in: %d\t out: %d\n", buffer->in_offs, buffer->out_offs);
+    //printf("\t %s", buffer->entry[buffer->in_offs].buffptr);
+    
+    buffer->in_offs += 1;
 }
 
 /**
