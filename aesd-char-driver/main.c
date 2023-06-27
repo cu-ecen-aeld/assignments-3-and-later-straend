@@ -21,7 +21,7 @@
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Tomas Strand"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
@@ -32,6 +32,20 @@ int aesd_open(struct inode *inode, struct file *filp)
     /**
      * TODO: handle open
      */
+    struct aesd_dev *dev; /* device information */
+
+	dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
+	filp->private_data = dev; /* for other methods */
+    
+    // /* now trim to 0 the length of the device if open was write-only */
+    // if ( (filp->f_flags & O_ACCMODE) == O_WRONLY) {
+	// 	if (mutex_lock_interruptible(&dev->lock))
+	// 		return -ERESTARTSYS;
+	// 	scull_trim(dev); /* ignore errors */
+	// 	mutex_unlock(&dev->lock);
+	// }
+    
+	
     return 0;
 }
 
@@ -49,9 +63,16 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 {
     ssize_t retval = 0;
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
+    if (filp!=NULL)
+    if (copy_to_user(buf, &"HELLO", 6)) {
+		retval = -EFAULT;
+		goto out;
+	}
     /**
      * TODO: handle read
      */
+    // Read next line from circular buffer
+out:
     return retval;
 }
 
@@ -63,6 +84,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     /**
      * TODO: handle write
      */
+    // Read until we get a \n then we send the linebuffer to circular buffer
+
     return retval;
 }
 struct file_operations aesd_fops = {
