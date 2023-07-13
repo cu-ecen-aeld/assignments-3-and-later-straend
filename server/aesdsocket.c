@@ -20,6 +20,8 @@
 #define BUFFER_SIZE (1024)
 
 #define DEBUG 0
+#define USE_AESD_CHAR_DEVICE 1
+#define AESD_CHAR_DEVICE "/dev/aesdchar"
 
 void FK_DEBUG(const char *fmt, ...)
 {
@@ -70,7 +72,10 @@ static void sigHandler(int sig)
   shutdown(sockfd, SHUT_WR);
   close(sockfd);
 
+#if !USE_AESD_CHAR_DEVICE
   unlink(LOG_FILE);
+#endif
+
   got_signal = true;
   
   // should free all data in linkedlist and stop all threads
@@ -125,6 +130,7 @@ void *connection_thread(void *arg)
   while (1) {
     char *buffer = malloc(BUFFER_SIZE);
     //if (NULL == buffer) goto ERR_BUFFER_ALLOCATION;
+    FK_DEBUG("Waiting for data\n");
     
     // wait for data or 10second timeout
     int bytes_read = recv(data->c, buffer, BUFFER_SIZE, 0);
@@ -146,6 +152,8 @@ void *connection_thread(void *arg)
 
     if (NULL != nn ) {
       int to_write = (nn-buffer);
+      FK_DEBUG("Writing %d bytes\n", to_write);
+
       int written = write(data->logfile, buffer, to_write);
       if (written < 0){
         FK_DEBUG("\tfailed: %d\n", errno);
@@ -186,27 +194,31 @@ void *connection_thread(void *arg)
   int res=pthread_mutex_lock(data->log_mutex);
   FK_DEBUG("mutex_lock: %d\n", res);
 
+
+  // close file if 
+#if USE_AESD_CHAR_DEVICE    
+  close(data->logfile);
+  data->logfile = open(AESD_CHAR_DEVICE, O_RDWR, 0644);
+#else
   // getting filesize
   lseek(data->logfile, 0, SEEK_SET);
   long filesize = lseek(data->logfile, 0, SEEK_END);
   lseek(data->logfile, 0, SEEK_SET);
   if (filesize < 0) return NULL; //goto ERR_NOTHING_TO_SEND; 
-
+#endif
+ 
   char *wrbuffer = (char*) malloc(BUFFER_SIZE);
   if (NULL==wrbuffer) return NULL; //goto ERR_BUFFER_ALLOCATION;
   size_t readbytes=0;
-  FK_DEBUG("Sending %ld bytes\n", filesize);
-  while(readbytes < filesize) {
-    
-    size_t this_read = read(data->logfile, wrbuffer, BUFFER_SIZE);
-    if (0==this_read){
-      // end of file
-      break;
-    }
-    FK_DEBUG("Sending %ld bytes total: %ld/%ld\n", this_read, readbytes+this_read, filesize);
+  FK_DEBUG("Sending bytes\n");
+  size_t this_read = read(data->logfile, wrbuffer, BUFFER_SIZE);
+  while(this_read > 0) {
+    FK_DEBUG("Sending %ld bytes total sent: %ld\n", this_read, readbytes+this_read);
     send(data->c, (void *)wrbuffer, this_read, 0);
     readbytes += this_read;
+    this_read = read(data->logfile, wrbuffer, BUFFER_SIZE);
   }
+  
   free(wrbuffer);
   // give back mutex
   res = pthread_mutex_unlock(data->log_mutex);
@@ -270,23 +282,30 @@ int main(int argc, char *argv[])
     signal(SIGTERM, sigHandler);
     FK_DEBUG("start listening\n");
     if( listen(sockfd, 5) < 0 ) goto ERR_LISTEN;
-    
-    int f_log = open(LOG_FILE, O_CREAT | O_TRUNC |O_RDWR, 0644);
+    int f_log;
+
+#if USE_AESD_CHAR_DEVICE
+    f_log = open(AESD_CHAR_DEVICE, O_RDWR, 0644);
+#else
+    f_log = open(LOG_FILE, O_CREAT | O_TRUNC |O_RDWR, 0644);
+#endif
+
     if (f_log < 0) {
       syslog(LOG_ERR, "OPpenfile failed: %d", f_log);
       goto ERR_FILE_ERROR;
     }
     // Create a mutex for file access
-    //static pthread_mutex_t m_logfile;
-    //pthread_mutex_init(&m_logfile, NULL);
     static pthread_mutex_t m_logfile = PTHREAD_MUTEX_INITIALIZER;
 
+    // Only use timestamper if we write to a file
+#if !USE_AESD_CHAR_DEVICE
     // create timestamper
     timestamper_data_t t_data;
     t_data.log_mutex = &m_logfile;
     t_data.logfile = f_log;
     pthread_create(&t_data.pid, NULL, &timestamper, (void*) &t_data);
-    
+#endif
+
     // Linked List for sockets
     SLIST_INIT(&head);
     while (1){
