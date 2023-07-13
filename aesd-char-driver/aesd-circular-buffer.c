@@ -65,24 +65,32 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 */
 char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-    char *ret = NULL;
+    char *ret;
+    bool inc_out = false;
     if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
         // return to first entry
         buffer->in_offs = 0;
         // allso increase out offset
-        if (++buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->out_offs = 0;    
+        inc_out = true;
+        buffer->full = true;
     }
+    // return pointer (or NULL) to overwritten entry
+    // after we have checked if overflow
+    ret = (char *) buffer->entry[buffer->in_offs].buffptr;
     
-    // We are overwriting old memory here, need to free memory
-    // buffptr is NULL if we dont have written there before
-    ret = buffer->entry[buffer->in_offs].buffptr;
+    // increase out_offs
+    if (buffer->full || inc_out) {
+        inc_out = false;
+        buffer->out_offs++;
+        if (buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->out_offs = 0;
+    }
+    printk("write %ld (%s) to: %d out (%d)", add_entry->size, add_entry->buffptr, buffer->in_offs, buffer->out_offs);
 
-    // insert into buffer
     buffer->entry[buffer->in_offs] = *add_entry;
     
     buffer->in_offs++;
-    // we'll check if we're overwriting at next write
-   
+    printk("next write to: %d", buffer->in_offs);
+    
     return ret;
 
 }
