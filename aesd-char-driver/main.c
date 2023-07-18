@@ -125,13 +125,19 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     if (dev->buffer == NULL){
         // cleared memory, allocate new
         dev->buffer = kmalloc(count, GFP_KERNEL);
-        dev->allocated = count;
+        //dev->allocated = count;
         if (NULL == entry.buffptr) goto out;
+        dev->allocated = ksize(dev->buffer);
+        PDEBUG("Allocated %lld", dev->allocated);
+        
     } else if (dev->allocated < (dev->used+count)) {
         // allocated memory, but we need more
         dev->buffer = krealloc(dev->buffer, dev->allocated+count, GFP_KERNEL);
         if (NULL == entry.buffptr) goto out;
-        dev->allocated += count;
+        //dev->allocated += count;
+        dev->allocated = ksize(dev->buffer);
+        PDEBUG("ReAllocated %lld", dev->allocated);
+
     }
     buffer = dev->buffer;
     buffer += dev->used;
@@ -169,8 +175,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->used = 0;
         dev->allocated = 0;
         dev->buffer = NULL;
-        //PDEBUG("GOT LINE %ld", entry.size);
         // free mutex
+        PDEBUG("Unlock");
         mutex_unlock(&dev->lock); 
 
 
