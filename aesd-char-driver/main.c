@@ -89,7 +89,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
             retval = -EFAULT;
             goto out;
         }
-        }
     }
     *f_pos = *f_pos + to_copy;
     retval = to_copy;
