@@ -43,6 +43,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         
         // check if searched offset is in current range
         if (char_offset <= cur_len){
+
             *entry_offset_byte_rtn = cur->size - (cur_len - char_offset);
             printk("reading position: %d", index);
 

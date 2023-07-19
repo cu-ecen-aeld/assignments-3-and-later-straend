@@ -34,8 +34,11 @@ struct aesd_dev
     char *buffer;
     ssize_t allocated;
     ssize_t used;
-    // locking mechanism
+
     struct aesd_circular_buffer cbuffer;
+    
+    // locking mechanism
+    struct mutex lock;
     struct cdev cdev;     /* Char device structure      */
 };
 
