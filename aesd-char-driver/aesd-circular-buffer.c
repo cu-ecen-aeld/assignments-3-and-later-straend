@@ -41,6 +41,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         if (cur->size == 0) return NULL;
         cur_len += cur->size;
 
+
         // check if searched offset is in current range
         if (char_offset < cur_len){
 
@@ -49,9 +50,11 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             return cur;
         }
 
+
         // increase index and wraparound to 0 if needed
         if (++index>=AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) index = 0;
     }
+
 
     // char_offset is too big, not in our data
     return NULL;
