@@ -34,6 +34,7 @@ struct aesd_dev
     char *buffer;
     ssize_t allocated;
     ssize_t used;
+
     struct aesd_circular_buffer cbuffer;
     
     // locking mechanism

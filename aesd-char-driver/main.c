@@ -34,7 +34,7 @@ const char *hello = "HELLO\n";
 int aesd_open(struct inode *inode, struct file *filp)
 {
     struct aesd_dev *dev;
-    PDEBUG("open");
+    PDEBUG("open2");
     // Add an aesd_dev to our filepointer for use in read, write and other functions
     dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
     filp->private_data = dev;
@@ -122,16 +122,31 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
     // if dev->buffer is NULL and we don't
     // Read until we get a \n then we send the linebuffer to circular buffer
+    PDEBUG("Check if we need to allocate");
     if (dev->buffer == NULL){
+        PDEBUG("Allocating %lld", count);
         // cleared memory, allocate new
         dev->buffer = kmalloc(count, GFP_KERNEL);
-        dev->allocated = count;
-        if (NULL == dev->buffer) goto out;
+        //dev->allocated = count;
+        if (NULL == dev->buffer){
+            PDEBUG("Failed allocating");
+            goto out;
+        } 
+        dev->allocated = ksize(dev->buffer);
+        PDEBUG("Allocated %lld", dev->allocated);
+        
     } else if (dev->allocated < (dev->used+count)) {
+        PDEBUG("reAllocating %lld", dev->allocated+count);
         // allocated memory, but we need more
         dev->buffer = krealloc(dev->buffer, dev->allocated+count, GFP_KERNEL);
-        if (NULL == dev->buffer) goto out;
-        dev->allocated += count;
+        if (NULL == dev->buffer){
+            PDEBUG("Failed reallocating");
+            goto out;
+        } 
+        //dev->allocated += count;
+        dev->allocated = ksize(dev->buffer);
+        PDEBUG("ReAllocated %lld", dev->allocated);
+
     }
     buffer = dev->buffer;
     buffer += dev->used;
@@ -169,9 +184,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->used = 0;
         dev->allocated = 0;
         dev->buffer = NULL;
-        //PDEBUG("GOT LINE %ld", entry.size);
         // free mutex
-        mutex_unlock(&dev->lock);
+        PDEBUG("Unlock");
+        mutex_unlock(&dev->lock); 
 
 
     }

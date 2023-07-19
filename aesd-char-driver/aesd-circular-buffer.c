@@ -42,8 +42,11 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         cur_len += cur->size;
 
         // check if searched offset is in current range
-        if (cur_len>char_offset){
+        if (char_offset <= cur_len){
+
             *entry_offset_byte_rtn = cur->size - (cur_len - char_offset);
+            printk("reading position: %d", index);
+
             return cur;
         }
 
@@ -65,19 +68,22 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 */
 char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-    char *ret;
-    bool inc_out = false;
-    if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
+    char *ret = NULL;
+     if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
         // return to first entry
         buffer->in_offs = 0;
-        // allso increase out offset
-        inc_out = true;
-        buffer->full = true;
+        if(!buffer->full){
+            buffer->full = true;
+            
+            // increase out pointer to next item and discard the oldest value
+            if (++buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->out_offs = 0;    
+
+        }
     }
     // return pointer (or NULL) to overwritten entry
     // after we have checked if overflow
     ret = (char *) buffer->entry[buffer->in_offs].buffptr;
-
+    
     // increase out_offs
     if (buffer->full || inc_out) {
         inc_out = false;
@@ -86,11 +92,13 @@ char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const 
     }
     printk("write %ld (%s) to: %d out (%d)", add_entry->size, add_entry->buffptr, buffer->in_offs, buffer->out_offs);
 
+    // insert into buffer
     buffer->entry[buffer->in_offs] = *add_entry;
-
+    //printk("\t in: %d\t out: %d\n", buffer->in_offs, buffer->out_offs);
+    //printk(">\t %s", buffer->entry[buffer->in_offs].buffptr);
     buffer->in_offs++;
-    printk("next write to: %d", buffer->in_offs);
-
+   
+    //if (++buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->in_offs = 0;
     return ret;
 
 }
