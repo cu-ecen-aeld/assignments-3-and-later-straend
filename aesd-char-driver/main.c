@@ -36,8 +36,8 @@ int aesd_open(struct inode *inode, struct file *filp)
     struct aesd_dev *dev;
     PDEBUG("open");
     // Add an aesd_dev to our filepointer for use in read, write and other functions
-	dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
-	filp->private_data = dev; 
+    dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
+    filp->private_data = dev;
     return 0;
 }
 
@@ -61,11 +61,11 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         goto out2;
     }
     mutex_lock(&dev->lock);
-    
+
     PDEBUG("read bytes with offset %lld", *f_pos);
     entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->cbuffer, *f_pos, &internal_offset);
     PDEBUG("internal offset %lld", internal_offset);
-    
+
     if (NULL == entry){
         //dev->cbuffer.out_offs = 0;
         retval = 0;
@@ -73,7 +73,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         goto out;
     }
     //PDEBUG("reading: (%zu) %s", entry->size, entry->buffptr);
-    
+
     // \n is missing from long
     to_copy = entry->size < count ? entry->size : count;
     if (entry->size > 0){
@@ -84,13 +84,13 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
             // Failed copying to user buffer
             retval = -EFAULT;
             goto out;
-	    }
+        }
     }
     *f_pos = *f_pos + to_copy;
     retval = to_copy;
 
 out:
-    mutex_unlock(&dev->lock); 
+    mutex_unlock(&dev->lock);
 
 out2:
     return retval;
@@ -105,7 +105,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     char *buffer;
     char *newline;
     char *overwritten;
-    
+
     // if mutex is open we need to lock it
     if(!mutex_is_locked(&dev->lock)){
         mutex_lock(&dev->lock);
@@ -119,18 +119,18 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         retval = -ERESTARTSYS;
         goto out;
     }
-    
-    // if dev->buffer is NULL and we don't 
+
+    // if dev->buffer is NULL and we don't
     // Read until we get a \n then we send the linebuffer to circular buffer
     if (dev->buffer == NULL){
         // cleared memory, allocate new
         dev->buffer = kmalloc(count, GFP_KERNEL);
         dev->allocated = count;
-        if (NULL == entry.buffptr) goto out;
+        if (NULL == dev->buffer) goto out;
     } else if (dev->allocated < (dev->used+count)) {
         // allocated memory, but we need more
         dev->buffer = krealloc(dev->buffer, dev->allocated+count, GFP_KERNEL);
-        if (NULL == entry.buffptr) goto out;
+        if (NULL == dev->buffer) goto out;
         dev->allocated += count;
     }
     buffer = dev->buffer;
@@ -140,20 +140,20 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         // We did not manage to copy all the data, abort and free allocated buffer
         retval = -EFAULT;
         kfree(dev->buffer);
-        mutex_unlock(&dev->lock); 
+        mutex_unlock(&dev->lock);
 
         goto out;
     }
     // search for newline  @TODO reduce datalen if \n is not the last char
     newline = strchr(buffer, '\n');
-    
+
     // update used memory size, after we have copied data
     dev->used += count;
     retval = count;
     if (NULL != newline){
         // sometimes we got too much data so, lets abort at buffer-len
         dev->buffer[dev->used+1] = 0;
-        
+
         // create an entry of our buffer
         entry.buffptr = dev->buffer;
         entry.size = dev->used;
@@ -171,7 +171,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->buffer = NULL;
         //PDEBUG("GOT LINE %ld", entry.size);
         // free mutex
-        mutex_unlock(&dev->lock); 
+        mutex_unlock(&dev->lock);
 
 
     }
@@ -219,7 +219,7 @@ int aesd_init_module(void)
     memset(&aesd_device,0,sizeof(struct aesd_dev));
     // Need to be done before we tell the kernel about cdev
     mutex_init(&aesd_device.lock);
-    //struct aesd_dev *aesd_d = (struct aesd_dev*) 
+    //struct aesd_dev *aesd_d = (struct aesd_dev*)
 
     result = aesd_setup_cdev(&aesd_device);
     if( result ) {
@@ -233,7 +233,7 @@ void aesd_cleanup_module(void)
 {
     int i;
     dev_t devno = MKDEV(aesd_major, aesd_minor);
-    
+
     // Should go trhough buffer and free all allocated memories
     for(i=0; i<AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++){
         if (aesd_device.cbuffer.entry[i].buffptr != NULL){
@@ -244,7 +244,7 @@ void aesd_cleanup_module(void)
         kfree(&aesd_device.buffer);
     }
     cdev_del(&aesd_device.cdev);
-    
+
     // clear allocated memories
     unregister_chrdev_region(devno, 1);
 }

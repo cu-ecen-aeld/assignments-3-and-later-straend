@@ -25,7 +25,7 @@
  * @param entry_offset_byte_rtn is a pointer specifying a location to store the byte of the returned aesd_buffer_entry
  *      buffptr member corresponding to char_offset.  This value is only set when a matching char_offset is found
  *      in aesd_buffer.
- * @return the struct aesd_buffer_entry structure representing the position described by char_offset, 
+ * @return the struct aesd_buffer_entry structure representing the position described by char_offset,
  *      or NULL if this position is not available in the buffer (not enough data is written).
  */
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
@@ -40,17 +40,17 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         // abort if current entry size is 0
         if (cur->size == 0) return NULL;
         cur_len += cur->size;
-        
+
         // check if searched offset is in current range
         if (cur_len>char_offset){
             *entry_offset_byte_rtn = cur->size - (cur_len - char_offset);
             return cur;
         }
-        
+
         // increase index and wraparound to 0 if needed
         if (++index>=AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) index = 0;
     }
-    
+
     // char_offset is too big, not in our data
     return NULL;
 }
@@ -77,7 +77,7 @@ char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const 
     // return pointer (or NULL) to overwritten entry
     // after we have checked if overflow
     ret = (char *) buffer->entry[buffer->in_offs].buffptr;
-    
+
     // increase out_offs
     if (buffer->full || inc_out) {
         inc_out = false;
@@ -87,10 +87,10 @@ char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const 
     printk("write %ld (%s) to: %d out (%d)", add_entry->size, add_entry->buffptr, buffer->in_offs, buffer->out_offs);
 
     buffer->entry[buffer->in_offs] = *add_entry;
-    
+
     buffer->in_offs++;
     printk("next write to: %d", buffer->in_offs);
-    
+
     return ret;
 
 }
