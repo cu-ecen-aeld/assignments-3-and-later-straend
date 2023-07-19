@@ -25,7 +25,7 @@
  * @param entry_offset_byte_rtn is a pointer specifying a location to store the byte of the returned aesd_buffer_entry
  *      buffptr member corresponding to char_offset.  This value is only set when a matching char_offset is found
  *      in aesd_buffer.
- * @return the struct aesd_buffer_entry structure representing the position described by char_offset, 
+ * @return the struct aesd_buffer_entry structure representing the position described by char_offset,
  *      or NULL if this position is not available in the buffer (not enough data is written).
  */
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
@@ -40,20 +40,19 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         // abort if current entry size is 0
         if (cur->size == 0) return NULL;
         cur_len += cur->size;
-        
+
         // check if searched offset is in current range
-        if (char_offset <= cur_len){
+        if (char_offset < cur_len){
 
             *entry_offset_byte_rtn = cur->size - (cur_len - char_offset);
-            printk("reading position: %d", index);
-
+            
             return cur;
         }
-        
+
         // increase index and wraparound to 0 if needed
         if (++index>=AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) index = 0;
     }
-    
+
     // char_offset is too big, not in our data
     return NULL;
 }
@@ -69,33 +68,25 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
     char *ret = NULL;
-     if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
-        // return to first entry
-        buffer->in_offs = 0;
-        if(!buffer->full){
-            buffer->full = true;
-            
-            // increase out pointer to next item and discard the oldest value
-            if (++buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->out_offs = 0;    
 
-        }
+    // return pointer (or NULL) to overwritten entry
+    // after we have checked if overflow
+    ret = (char *) buffer->entry[buffer->in_offs].buffptr;
+    
+    // increase out_offs
+    if (buffer->full) {
+        if (++buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->out_offs = 0;
     }
-    // Check if we have written over the limit
-    // and need to wrap around to the start again
-
-    printk("Writing to position: %d", buffer->in_offs);
-    // We are overwriting old memory here
-    // need to free memory
-    // buffptr is NULL if we dont have written there before
-    ret = buffer->entry[buffer->in_offs].buffptr;
-
+    
     // insert into buffer
     buffer->entry[buffer->in_offs] = *add_entry;
-    //printk("\t in: %d\t out: %d\n", buffer->in_offs, buffer->out_offs);
-    //printk(">\t %s", buffer->entry[buffer->in_offs].buffptr);
     buffer->in_offs++;
-   
-    //if (++buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->in_offs = 0;
+    
+    if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
+        // return to first entry
+        buffer->in_offs = 0;
+        buffer->full = true;
+    }
     return ret;
 
 }
