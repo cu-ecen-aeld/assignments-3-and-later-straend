@@ -10,11 +10,13 @@
 
 #ifdef __KERNEL__
 #include <linux/string.h>
+#include <linux/slab.h>
 #else
 #include <string.h>
 #endif
 
 #include "aesd-circular-buffer.h"
+#include <linux/printk.h>
 
 /**
  * @param buffer the buffer to search for corresponding offset.  Any necessary locking must be performed by caller.
@@ -23,8 +25,8 @@
  * @param entry_offset_byte_rtn is a pointer specifying a location to store the byte of the returned aesd_buffer_entry
  *      buffptr member corresponding to char_offset.  This value is only set when a matching char_offset is found
  *      in aesd_buffer.
- * @return the struct aesd_buffer_entry structure representing the position described by char_offset, or
- * NULL if this position is not available in the buffer (not enough data is written).
+ * @return the struct aesd_buffer_entry structure representing the position described by char_offset, 
+ *      or NULL if this position is not available in the buffer (not enough data is written).
  */
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
             size_t char_offset, size_t *entry_offset_byte_rtn )
@@ -33,16 +35,17 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     int index = buffer->out_offs;
     size_t cur_len = 0;
     int iterations = 0;
-    
     while(iterations++ < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
         cur = &buffer->entry[index];
+        // abort if current entry size is 0
+        if (cur->size == 0) return NULL;
         cur_len += cur->size;
         
         // check if searched offset is in current range
-        if (char_offset < cur_len){
-            //printf("MATCH: offset: %ld\t cur_len: %ld\n", char_offset, cur_len);
-            //printf("\t size: %ld\t cur-len - size: %ld\n", cur->size, cur_len - cur->size);
+        if (char_offset <= cur_len){
             *entry_offset_byte_rtn = cur->size - (cur_len - char_offset);
+            printk("reading position: %d", index);
+
             return cur;
         }
         
@@ -60,31 +63,40 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * new start location.
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
+* @return returns a pointer to old memory that caller should free, or NULL if no entry is overwritten
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-    // Check if we have written over the limit
-    // and need to wrap around to the start again
-    if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
+    char *ret = NULL;
+     if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
         // return to first entry
         buffer->in_offs = 0;
         if(!buffer->full){
-            //printf("OVERRUN\n");
             buffer->full = true;
             
             // increase out pointer to next item and discard the oldest value
             if (++buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->out_offs = 0;    
+
         }
     }
+    // Check if we have written over the limit
+    // and need to wrap around to the start again
 
-    
+    printk("Writing to position: %d", buffer->in_offs);
+    // We are overwriting old memory here
+    // need to free memory
+    // buffptr is NULL if we dont have written there before
+    ret = buffer->entry[buffer->in_offs].buffptr;
+
     // insert into buffer
     buffer->entry[buffer->in_offs] = *add_entry;
-    //printf("ADD\n");
-    //printf("\t in: %d\t out: %d\n", buffer->in_offs, buffer->out_offs);
-    //printf("\t %s", buffer->entry[buffer->in_offs].buffptr);
-    
-    buffer->in_offs += 1;
+    //printk("\t in: %d\t out: %d\n", buffer->in_offs, buffer->out_offs);
+    //printk(">\t %s", buffer->entry[buffer->in_offs].buffptr);
+    buffer->in_offs++;
+   
+    //if (++buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) buffer->in_offs = 0;
+    return ret;
+
 }
 
 /**
