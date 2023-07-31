@@ -344,7 +344,7 @@ int main(int argc, char *argv[])
           FK_DEBUG("Removing thread: %lu\n", datap->pid);
           //SLIST_REMOVE(datap, entries);
           SLIST_REMOVE(&head, datap, slist_data_s, entries);
-          free(datap);
+          //free(datap);
         }
         
       }
