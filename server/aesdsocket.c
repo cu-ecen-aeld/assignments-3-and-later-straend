@@ -282,23 +282,20 @@ int main(int argc, char *argv[])
     signal(SIGTERM, sigHandler);
     FK_DEBUG("start listening\n");
     if( listen(sockfd, 5) < 0 ) goto ERR_LISTEN;
-    int f_log;
+    int f_log = 0;
 
-#if USE_AESD_CHAR_DEVICE
-    f_log = open(AESD_CHAR_DEVICE, O_RDWR, 0644);
-#else
-    f_log = open(LOG_FILE, O_CREAT | O_TRUNC |O_RDWR, 0644);
-#endif
 
-    if (f_log < 0) {
-      syslog(LOG_ERR, "OPpenfile failed: %d", f_log);
-      goto ERR_FILE_ERROR;
-    }
+
     // Create a mutex for file access
     static pthread_mutex_t m_logfile = PTHREAD_MUTEX_INITIALIZER;
 
     // Only use timestamper if we write to a file
 #if !USE_AESD_CHAR_DEVICE
+    f_log = open(LOG_FILE, O_CREAT | O_TRUNC |O_RDWR, 0644);
+    if (f_log < 0) {
+      syslog(LOG_ERR, "OPpenfile failed: %d", f_log);
+      goto ERR_FILE_ERROR;
+    }
     // create timestamper
     timestamper_data_t t_data;
     t_data.log_mutex = &m_logfile;
@@ -317,6 +314,15 @@ int main(int argc, char *argv[])
         FK_DEBUG("Timed out accepting: %d\n", errno);
         
         return 5;
+      }
+      if (f_log == 0) {
+        #if USE_AESD_CHAR_DEVICE
+          f_log = open(AESD_CHAR_DEVICE, O_RDWR, 0644);
+        #endif
+        if (f_log < 0) {
+          syslog(LOG_ERR, "OPpenfile failed: %d", f_log);
+          goto ERR_FILE_ERROR;
+        }
       }
       datap->log_mutex = &m_logfile;
       datap->logfile = f_log;//dup(f_log);
