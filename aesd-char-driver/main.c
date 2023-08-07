@@ -12,6 +12,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/uaccess.h>
 #include <linux/init.h>
 #include <linux/printk.h>
 #include <linux/types.h>
@@ -81,7 +82,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     // \n is missing from long
     to_copy = entry->size < count ? entry->size : count;
     if (entry->size > 0){
-        char *ptr = entry->buffptr;
+        char *ptr = (char *) entry->buffptr;
         ptr += internal_offset;
         PDEBUG("copying %ld bytes to user", to_copy);
         if (copy_to_user(buf, ptr, to_copy)) {
@@ -261,7 +262,7 @@ void aesd_cleanup_module(void)
     // Should go trhough buffer and free all allocated memories
     for(i=0; i<AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++){
         if (aesd_device.cbuffer.entry[i].buffptr != NULL){
-            kfree(&aesd_device.cbuffer.entry[i].buffptr);
+            kfree(aesd_device.cbuffer.entry[i].buffptr);
         }
     }
     if (NULL != aesd_device.buffer) {
