@@ -2,7 +2,7 @@
 
 SRC := aesdsocket.c
 TARGET ?= aesdsocket
-CC ?= ${CROSS_COMPILE}gcc
+#CC = ${CROSS_COMPILE}gcc
 CFLAGS ?= -g -Wall -Werror -std=gnu99
 LDFLAGS ?= -lpthread
 all: default

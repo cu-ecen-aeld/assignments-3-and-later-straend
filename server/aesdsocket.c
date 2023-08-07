@@ -137,6 +137,7 @@ void *connection_thread(void *arg)
     if (bytes_read < 1){
       FK_DEBUG("socket failure: %d\n", errno);
       free(buffer);
+      data->completed = true;
       return NULL;
     }
     totalbytes += bytes_read;
@@ -315,17 +316,17 @@ int main(int argc, char *argv[])
         
         return 5;
       }
-      if (f_log == 0) {
-        #if USE_AESD_CHAR_DEVICE
-          f_log = open(AESD_CHAR_DEVICE, O_RDWR, 0644);
-        #endif
-        if (f_log < 0) {
-          syslog(LOG_ERR, "OPpenfile failed: %d", f_log);
-          goto ERR_FILE_ERROR;
+      #if USE_AESD_CHAR_DEVICE
+        if (f_log == 0) {
+            f_log = open(AESD_CHAR_DEVICE, O_RDWR, 0644);
+            if (f_log < 0) {
+              syslog(LOG_ERR, "OPpenfile failed: %d", f_log);
+              goto ERR_FILE_ERROR;
+            }
         }
-      }
+      #endif
       datap->log_mutex = &m_logfile;
-      datap->logfile = f_log;//dup(f_log);
+      datap->logfile = f_log;
       datap->completed = false;
       // do the fork dance here
       // update pid in data, and insert to linked lise
@@ -344,7 +345,7 @@ int main(int argc, char *argv[])
           FK_DEBUG("Removing thread: %lu\n", datap->pid);
           //SLIST_REMOVE(datap, entries);
           SLIST_REMOVE(&head, datap, slist_data_s, entries);
-          //free(datap);
+          free(datap);
         }
         
       }
