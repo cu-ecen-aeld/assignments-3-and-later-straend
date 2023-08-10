@@ -15,6 +15,8 @@
 
 #include "freebsd_queue.h"
 
+#include "../aesd-char-driver/aesd_ioctl.h"
+
 #define LOG_FILE "/var/tmp/aesdsocketdata"
 #define PORT "9000"
 #define BUFFER_SIZE (1024)
@@ -121,10 +123,11 @@ void *timestamper(void *arg) {
 
 void *connection_thread(void *arg)
 {
+  bool seeked = false;
   slist_data_t *data = (slist_data_t *) arg;
   char *client_ip = inet_ntoa(data->client_ca.sin_addr);
   syslog(LOG_DAEMON, "Accepted connection from %s", client_ip);
-    
+  
   unsigned long totalbytes=0;
   // read messages separated by \n until \0 is received
   while (1) {
@@ -153,23 +156,37 @@ void *connection_thread(void *arg)
 
     if (NULL != nn ) {
       int to_write = (nn-buffer);
-      FK_DEBUG("Writing %d bytes\n", to_write);
+      // check if ioctl command in stream
+      if (strncmp(buffer, "AESDCHAR_IOCSEEKTO:", 19)==0){
+        FK_DEBUG("GOT COMMAND\n\t");
+        FK_DEBUG(buffer+19);
+        FK_DEBUG("\n\n");
 
-      int written = write(data->logfile, buffer, to_write);
-      if (written < 0){
-        FK_DEBUG("\tfailed: %d\n", errno);
+        
+        struct aesd_seekto seekto;
+        char *tok = strtok(buffer+19, ",");
+        seekto.write_cmd = atoi(tok);
+        tok=strtok(NULL, ",");
+        seekto.write_cmd_offset = atoi(tok);
+        ioctl(data->logfile, AESDCHAR_IOCSEEKTO, (unsigned long) &seekto);
+        seeked = true;
+      } else {
+        FK_DEBUG("Writing %d bytes\n", to_write);
+        int written = write(data->logfile, buffer, to_write);
+        if (written < 0){
+          FK_DEBUG("\tfailed: %d\n", errno);
+        }
+        FK_DEBUG("\tComplete message len: %d wrote: %d\n", to_write, written);
+
+        buffer[0] = '\n';
+        written = write(data->logfile, buffer, 1);
+
       }
-      FK_DEBUG("\tComplete message len: %d wrote: %d\n", to_write, written);
-      //buffer[to_write] = '\0';
-      //FK_DEBUG("\tmessage '%s'\n", buffer);
 
-      buffer[0] = '\n';
-      written = write(data->logfile, buffer, 1);
       free(buffer);
       FK_DEBUG("unlocking mutex\n");
       res=pthread_mutex_unlock(data->log_mutex);
       FK_DEBUG("mutex_unlock: %d\n", res);
-
       break;
     } else {
       FK_DEBUG("No complete message yet, (writing %d to log)\n", bytes_read);
@@ -196,18 +213,10 @@ void *connection_thread(void *arg)
   FK_DEBUG("mutex_lock: %d\n", res);
 
 
-  // close file if 
-#if USE_AESD_CHAR_DEVICE    
-  close(data->logfile);
-  data->logfile = open(AESD_CHAR_DEVICE, O_RDWR, 0644);
-#else
-  // getting filesize
-  lseek(data->logfile, 0, SEEK_SET);
-  long filesize = lseek(data->logfile, 0, SEEK_END);
-  lseek(data->logfile, 0, SEEK_SET);
-  if (filesize < 0) return NULL; //goto ERR_NOTHING_TO_SEND; 
-#endif
- 
+  // seek to beginning of file if we don't have seeked
+  // with command in stream
+  if(!seeked) lseek(data->logfile, 0, SEEK_SET);
+
   char *wrbuffer = (char*) malloc(BUFFER_SIZE);
   if (NULL==wrbuffer) return NULL; //goto ERR_BUFFER_ALLOCATION;
   size_t readbytes=0;
