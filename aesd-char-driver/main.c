@@ -80,7 +80,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 
 
     // \n is missing from long
-    to_copy = entry->size < count ? entry->size : count;
+    to_copy = (entry->size -internal_offset) < count ? entry->size-internal_offset : count;
     if (entry->size > 0){
         char *ptr = (char *) entry->buffptr;
         ptr += internal_offset;
